@@ -396,7 +396,7 @@ defmodule Bamboo.SendGridAdapter do
   defp put_attachments(body, %Email{attachments: []}), do: body
 
   defp put_attachments(body, %Email{
-         attachments: [%{type: "text/calendar;" <> _} = ical_attachment]
+         attachments: [%{content_type: "text/calendar;" <> _} = ical_attachment]
        }) do
     content = Map.get(body, :content, [])
 
