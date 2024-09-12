@@ -390,21 +390,35 @@ defmodule Bamboo.SendGridAdapter do
 
   defp put_subscription_tracking(body, _), do: body
 
+  defp put_attachments(%{attachments: current_attachments} = body, %Email{attachments: []}),
+    do: %{body | attachments: Enum.reverse(current_attachments)}
+
   defp put_attachments(body, %Email{attachments: []}), do: body
 
-  defp put_attachments(body, %Email{attachments: attachments}) do
-    transformed =
-      attachments
-      |> Enum.reverse()
-      |> Enum.map(fn attachment ->
-        %{
-          filename: attachment.filename,
-          type: attachment.content_type,
-          content: Base.encode64(attachment.data)
-        }
-      end)
+  defp put_attachments(body, %Email{
+         attachments: [%{type: "text/calendar;" <> _} = ical_attachment]
+       }) do
+    content = Map.get(body, :content, [])
 
-    Map.put(body, :attachments, transformed)
+    [%{type: ical_attachment.type, content: ical_attachment.data} | content]
+    |> Enum.reverse()
+    |> then(&Map.put(body, :content, &1))
+  end
+
+  defp put_attachments(body, %Email{
+         attachments: [attachment | rest]
+       }) do
+    current_attachments = Map.get(body, :attachments, [])
+
+    transformed = %{
+      filename: attachment.filename,
+      type: attachment.content_type,
+      content: Base.encode64(attachment.data)
+    }
+
+    body
+    |> Map.put(:attachments, [transformed | current_attachments])
+    |> put_attachments(%Email{attachments: rest})
   end
 
   defp put_addresses(body, _, []), do: body
