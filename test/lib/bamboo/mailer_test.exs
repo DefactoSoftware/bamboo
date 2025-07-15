@@ -2,13 +2,17 @@ defmodule Bamboo.MailerTest do
   use ExUnit.Case
   alias Bamboo.Email
 
-  @mailer_config adapter: __MODULE__.DefaultAdapter, foo: :bar, interceptors: nil
+  @mailer_config adapter: __MODULE__.DefaultAdapter, foo: :bar, interceptors: nil, before_interceptors: nil
 
   setup context do
     config =
       Keyword.merge(
         @mailer_config,
-        [adapter: context[:adapter], interceptors: context[:interceptors]],
+        [
+          adapter: context[:adapter],
+          before_interceptors: context[:before_interceptors],
+          interceptors: context[:interceptors]
+        ],
         fn
           _key, default, nil -> default
           _key, _default, override -> override
@@ -456,6 +460,44 @@ defmodule Bamboo.MailerTest do
       {:ok, email} = Mailer.deliver_now(email, response: true)
 
       refute_received {:deliver, ^email, _}
+    end
+  end
+
+  describe "before_interceptors" do
+    @tag before_interceptors: [Bamboo.InactiveUsersInterceptor]
+    test "deliver_now/1 must apply before_interceptors and block email if user is inactive" do
+      email = new_email(to: %Bamboo.User{email: "inactive@bar.com", active: false})
+      assert {:ok, %Bamboo.Email{blocked: true}} = Mailer.deliver_now(email)
+    end
+
+    @tag before_interceptors: [Bamboo.InactiveUsersInterceptor]
+    test "deliver_later/1 must apply before_interceptors and block email if user is inactive" do
+      email = new_email(to: %Bamboo.User{email: "inactive@bar.com", active: false})
+      assert {:ok, %Bamboo.Email{blocked: true}} = Mailer.deliver_later(email)
+    end
+
+    @tag before_interceptors: [Bamboo.InactiveUsersInterceptor]
+    test "deliver_now/1 must apply before_interceptors and block email if user has no email" do
+      email = new_email(to: %Bamboo.User{email: nil})
+      assert {:ok, %Bamboo.Email{blocked: true}} = Mailer.deliver_now(email)
+    end
+
+    @tag before_interceptors: [Bamboo.InactiveUsersInterceptor]
+    test "deliver_later/1 must apply before_interceptors and block email if user has no email" do
+      email = new_email(to: %Bamboo.User{email: nil})
+      assert {:ok, %Bamboo.Email{blocked: true}} = Mailer.deliver_later(email)
+    end
+
+    @tag before_interceptors: [Bamboo.InactiveUsersInterceptor]
+    test "deliver_now/1 does not block regular email on deliver now" do
+      email = new_email(to: %Bamboo.User{name: "John Doe", email: "active@bar.com", active: true})
+      assert {:ok, %Bamboo.Email{blocked: false, to: [{"John Doe", "active@bar.com"}]}} = Mailer.deliver_now(email)
+    end
+
+    @tag before_interceptors: [Bamboo.InactiveUsersInterceptor]
+    test "deliver_later/1 does not block regular email on deliver later" do
+      email = new_email(to: %Bamboo.User{name: "John Doe", email: "active@bar.com", active: true})
+      assert {:ok, %Bamboo.Email{blocked: false}} = Mailer.deliver_later(email)
     end
   end
 
