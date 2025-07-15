@@ -203,8 +203,9 @@ defmodule Bamboo.Mailer do
 
   @doc false
   def deliver_now(adapter, email, config, opts) do
-    with %Bamboo.Email{blocked: false} = email <- apply_interceptors(email, config),
-         {:ok, email} <- validate_and_normalize(email, adapter) do
+    with %Bamboo.Email{blocked: false} = email <- apply_before_interceptors(email, config),
+         {:ok, email} <- validate_and_normalize(email, adapter),
+         %Bamboo.Email{blocked: false} = email <- apply_interceptors(email, config) do
       if empty_recipients?(email) do
         debug_unsent(email)
 
@@ -244,8 +245,9 @@ defmodule Bamboo.Mailer do
 
   @doc false
   def deliver_later(adapter, email, config) do
-    with %Bamboo.Email{blocked: false} = email <- apply_interceptors(email, config),
-         {:ok, email} <- validate_and_normalize(email, adapter) do
+    with %Bamboo.Email{blocked: false} = email <- apply_before_interceptors(email, config),
+         {:ok, email} <- validate_and_normalize(email, adapter),
+         %Bamboo.Email{blocked: false} = email <- apply_interceptors(email, config) do
       if empty_recipients?(email) do
         debug_unsent(email)
       else
@@ -349,6 +351,14 @@ defmodule Bamboo.Mailer do
 
   defp apply_interceptors(email, config) do
     interceptors = config[:interceptors] || []
+
+    Enum.reduce(interceptors, email, fn interceptor, email ->
+      interceptor.call(email)
+    end)
+  end
+
+  defp apply_before_interceptors(email, config) do
+    interceptors = config[:before_interceptors] || []
 
     Enum.reduce(interceptors, email, fn interceptor, email ->
       interceptor.call(email)
